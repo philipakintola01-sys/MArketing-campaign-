@@ -42,7 +42,7 @@ class MediaTeamBot(discord.Client):
                 response_text = self.orchestrator.generate_response(self.current_agent, history)
             except Exception as e:
                 print(f"CRITICAL ERROR: {e}")
-                response_text = "⚠️ My AI processing unit just hit an error. I've logged the details, but you might want to try rephrasing or checking if the API is down!"
+                response_text = "⚠️ My AI processing unit just hit an error. Please check the logs to see what happened: https://dashboard.render.com/"
                 await message.channel.send(response_text)
                 return
 

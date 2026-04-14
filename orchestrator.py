@@ -1,16 +1,15 @@
 import os
-import google.generativeai as genai
+import requests
 from typing import List, Dict, Any
 
 class Orchestrator:
     def __init__(self):
-        # Initialize Gemini
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables.")
-        genai.configure(api_key=api_key)
-        # Use the most robust model string for Flash
-        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        # Initialize OpenRouter
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
+        # Use a reliable free model from OpenRouter
+        self.model_name = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3-8b-instruct:free")
         
         # Shared Context from Blueprint
         self.shared_context = """
@@ -77,24 +76,38 @@ Your job: GitHub repos, READMEs, automations, debugging APIs.
         """
         system_prompt = self.shared_context + "\n" + self.agent_prompts.get(agent_name, "")
         
-        # Format history for Gemini
-        # We inject the system prompt as the first message or instruction
-        full_history = [{"role": "user", "parts": [system_prompt]}]
+        # Format history for OpenRouter
+        messages = [{"role": "system", "content": system_prompt}]
         for msg in message_history:
-            role = "user" if msg["role"] == "user" else "model"
+            role = "user" if msg["role"] == "user" else "assistant"
             content = f"[{msg['sender']}] {msg['content']}" if msg.get("sender") else msg["content"]
-            full_history.append({"role": role, "parts": [content]})
+            messages.append({"role": role, "content": content})
             
         try:
-            response = self.model.generate_content(full_history)
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "HTTP-Referer": "https://github.com/philipakintola01-sys/MArketing-campaign-", # Required by OpenRouter
+                "X-Title": "Agent Media Person", # Optional
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": self.model_name,
+                "messages": messages
+            }
+            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+            response.raise_for_status()
             
-            # Check for blocked responses
-            if not response.candidates or not hasattr(response, 'text'):
+            response_json = response.json()
+            
+            # Check for blocked responses or empty results
+            if "choices" not in response_json or len(response_json["choices"]) == 0:
                 return "I'm having a brief AI brain-freeze (safety block or empty result). Let's try rephrasing that!"
                 
-            return response.text
+            return response_json["choices"][0]["message"]["content"]
         except Exception as e:
-            print(f"ERROR in Gemini Generation: {e}")
+            print(f"ERROR in OpenRouter Generation: {e}")
+            if 'response' in locals() and hasattr(response, 'text'):
+                print(f"API Response Text: {response.text}")
             raise e
 
     def decide_next_agent(self, last_message: str, current_agent: str) -> str:
