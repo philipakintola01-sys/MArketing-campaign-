@@ -9,7 +9,8 @@ class Orchestrator:
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables.")
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use the most robust model string for Flash
+        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         # Shared Context from Blueprint
         self.shared_context = """
@@ -84,17 +85,40 @@ Your job: GitHub repos, READMEs, automations, debugging APIs.
             content = f"[{msg['sender']}] {msg['content']}" if msg.get("sender") else msg["content"]
             full_history.append({"role": role, "parts": [content]})
             
-        response = self.model.generate_content(full_history)
-        return response.text
+        try:
+            response = self.model.generate_content(full_history)
+            
+            # Check for blocked responses
+            if not response.candidates or not hasattr(response, 'text'):
+                return "I'm having a brief AI brain-freeze (safety block or empty result). Let's try rephrasing that!"
+                
+            return response.text
+        except Exception as e:
+            print(f"ERROR in Gemini Generation: {e}")
+            raise e
 
     def decide_next_agent(self, last_message: str, current_agent: str) -> str:
         """
         Logic to decide which agent should talk next.
         Standard flow: User -> MORGAN -> (SCOUT or ALEX or PIXEL) -> ECHO
         """
-        # Simple heuristic for now, better to let MORGAN decide.
-        if "one-time" in last_message.lower():
+        # 1. Check for manual tags (e.g., if user says "Hey ALEX")
+        text = last_message.upper()
+        for agent in self.agent_prompts.keys():
+            if f"@{agent}" in text or f" {agent} " in text or text.startswith(f"{agent}"):
+                return agent
+        
+        # 2. Simple Routing keywords
+        if any(word in text for word in ["IMAGE", "VISUAL", "PROMPT", "PICTURE"]):
+            return "PIXEL"
+        if any(word in text for word in ["WRITE", "COPY", "CAPTION", "POST TEXT"]):
             return "ALEX"
-        if "campaign" in last_message.lower():
-            return "MORGAN" # Morgan handles the campaign intake
-        return current_agent
+        if any(word in text for word in ["GITHUB", "CODE", "README", "AUTO"]):
+            return "CIPHER"
+        if any(word in text for word in ["SEO", "TREND", "KEYWORDS"]):
+            return "SCOUT"
+        if any(word in text for word in ["POST", "SCHEDULE", "LINKEDIN"]):
+            return "ECHO"
+
+        # 3. Default to MORGAN (the Manager)
+        return "MORGAN"

@@ -1,5 +1,5 @@
 discord.py
-google-generativeai
+google-generativeai>=0.8.0
 playwright
 supabase
 python-dotenv

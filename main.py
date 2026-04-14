@@ -38,7 +38,13 @@ class MediaTeamBot(discord.Client):
 
         # 4. Generate Response
         async with message.channel.typing():
-            response_text = self.orchestrator.generate_response(self.current_agent, history)
+            try:
+                response_text = self.orchestrator.generate_response(self.current_agent, history)
+            except Exception as e:
+                print(f"CRITICAL ERROR: {e}")
+                response_text = "⚠️ My AI processing unit just hit an error. I've logged the details, but you might want to try rephrasing or checking if the API is down!"
+                await message.channel.send(response_text)
+                return
 
         # 5. Send Response as the specific agent
         await self.personas.send_as_agent(self.current_agent, response_text, message.channel)
