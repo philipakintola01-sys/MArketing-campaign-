@@ -1,15 +1,17 @@
 import os
-import requests
+from groq import Groq
 from typing import List, Dict, Any
 
 class Orchestrator:
     def __init__(self):
-        # Initialize OpenRouter
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        # Initialize Groq
+        self.api_key = os.getenv("GROQ_API_KEY")
         if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
-        # Use a reliable free model from OpenRouter
-        self.model_name = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3-8b-instruct:free")
+            raise ValueError("GROQ_API_KEY not found in environment variables.")
+        
+        self.client = Groq(api_key=self.api_key)
+        # Use a reliable model from Groq
+        self.model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         
         # Shared Context from Blueprint
         self.shared_context = """
@@ -72,42 +74,33 @@ Your job: GitHub repos, READMEs, automations, debugging APIs.
 
     def generate_response(self, agent_name: str, message_history: List[Dict[str, str]]) -> str:
         """
-        Generates a response from a specific agent given the conversation history.
+        Generates a response from a specific agent given the conversation history using Groq.
         """
         system_prompt = self.shared_context + "\n" + self.agent_prompts.get(agent_name, "")
         
-        # Format history for OpenRouter
+        # Format history for Groq
         messages = [{"role": "system", "content": system_prompt}]
         for msg in message_history:
             role = "user" if msg["role"] == "user" else "assistant"
+            # Add [AgentName] prefix if available for context
             content = f"[{msg['sender']}] {msg['content']}" if msg.get("sender") else msg["content"]
             messages.append({"role": role, "content": content})
             
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "HTTP-Referer": "https://github.com/philipakintola01-sys/MArketing-campaign-", # Required by OpenRouter
-                "X-Title": "Agent Media Person", # Optional
-                "Content-Type": "application/json"
-            }
-            data = {
-                "model": self.model_name,
-                "messages": messages
-            }
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-            response.raise_for_status()
+            completion = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048,
+                top_p=1,
+                stream=False,
+                stop=None,
+            )
             
-            response_json = response.json()
+            return completion.choices[0].message.content
             
-            # Check for blocked responses or empty results
-            if "choices" not in response_json or len(response_json["choices"]) == 0:
-                return "I'm having a brief AI brain-freeze (safety block or empty result). Let's try rephrasing that!"
-                
-            return response_json["choices"][0]["message"]["content"]
         except Exception as e:
-            print(f"ERROR in OpenRouter Generation: {e}")
-            if 'response' in locals() and hasattr(response, 'text'):
-                print(f"API Response Text: {response.text}")
+            print(f"ERROR in Groq Generation: {e}")
             raise e
 
     def decide_next_agent(self, last_message: str, current_agent: str) -> str:
