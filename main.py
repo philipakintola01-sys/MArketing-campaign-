@@ -60,6 +60,7 @@ class MediaTeamBot(discord.Client):
         import re
         from automation.image_gen import ImageGenerator
         from automation.github_utils import GithubManager
+        from automation.browser import SocialPoster  # Add import
         
         # Regex to find commands like [CMD: NAME(args)]
         cmds = re.findall(r"\[CMD:\s*(\w+)\((.*?)\)\]", text)
@@ -78,9 +79,17 @@ class MediaTeamBot(discord.Client):
                 res = gh.update_readme("your-repo-name", args) # Simple placeholder logic
                 await self.personas.send_as_agent("CIPHER", res, channel)
             
-            elif cmd_name == "POST_LINKED_IN":
-                await self.personas.send_as_agent("ECHO", "Initiating LinkedIn browser automation...", channel)
-                # Call automation/browser.py logic here
+            elif cmd_name == "POST_LINKEDIN":
+                await self.personas.send_as_agent("CIPHER", "Initiating LinkedIn browser automation. Please wait, this may take a few seconds...", channel)
+                poster = SocialPoster()
+                result = await poster.post_to_linkedin(args)
+                await self.personas.send_as_agent("CIPHER", f"LinkedIn Automation Report: {result}", channel)
+
+            elif cmd_name == "POST_X":
+                await self.personas.send_as_agent("CIPHER", "Initiating X (Twitter) browser automation. Please wait...", channel)
+                poster = SocialPoster()
+                result = await poster.post_to_x(args)
+                await self.personas.send_as_agent("CIPHER", f"X Automation Report: {result}", channel)
 
 if __name__ == "__main__":
     # Start the web server for Render

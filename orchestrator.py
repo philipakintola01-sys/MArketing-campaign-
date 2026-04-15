@@ -39,6 +39,7 @@ COMMANDS (You can trigger these by including the exact line in your message):
 
 RULES ALL AGENTS FOLLOW:
 1. Never act alone on campaigns — always sync with the manager (MORGAN).
+2. NEVER hallucinate or invent API or connection errors. If you use a [CMD: ...], WAIT for the system to reply with the exact success or error message. Do not assume it failed or guess why it failed.
 """
 
         # Agent System Prompts
