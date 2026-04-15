@@ -1,19 +1,23 @@
 import os
-from groq import Groq
+from groq import AsyncGroq
 from typing import List, Dict, Any
 
 class Orchestrator:
     def __init__(self):
         # Initialize Groq
         self.api_key = os.getenv("GROQ_API_KEY")
-        if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables.")
+        if not self.api_key or "your_groq" in self.api_key:
+            # We don't raise error here to let the bot start, 
+            # but we will handle it in generate_response
+            self.client = None
+        else:
+            self.client = AsyncGroq(api_key=self.api_key)
         
-        self.client = Groq(api_key=self.api_key)
         # Use a reliable model from Groq
         self.model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         
         # Shared Context from Blueprint
+        # ... (rest of shared context)
         self.shared_context = """
 SHARED CONTEXT:
 You are part of a 6-agent social media team. Your team manages project launches and campaigns 
@@ -35,7 +39,6 @@ COMMANDS (You can trigger these by including the exact line in your message):
 
 RULES ALL AGENTS FOLLOW:
 1. Never act alone on campaigns — always sync with the manager (MORGAN).
-...
 """
 
         # Agent System Prompts
@@ -72,35 +75,34 @@ Your job: GitHub repos, READMEs, automations, debugging APIs.
 """
         }
 
-    def generate_response(self, agent_name: str, message_history: List[Dict[str, str]]) -> str:
+    async def generate_response(self, agent_name: str, message_history: List[Dict[str, str]]) -> str:
         """
-        Generates a response from a specific agent given the conversation history using Groq.
+        Generates a response from a specific agent using AsyncGroq.
         """
+        if not self.client:
+            return "❌ **SYSTEM ERROR**: Groq API Key is missing or still set to the placeholder in the `.env` file. Please add a valid key from console.groq.com and restart the bot!"
+
         system_prompt = self.shared_context + "\n" + self.agent_prompts.get(agent_name, "")
         
         # Format history for Groq
         messages = [{"role": "system", "content": system_prompt}]
         for msg in message_history:
             role = "user" if msg["role"] == "user" else "assistant"
-            # Add [AgentName] prefix if available for context
             content = f"[{msg['sender']}] {msg['content']}" if msg.get("sender") else msg["content"]
             messages.append({"role": role, "content": content})
             
         try:
-            completion = self.client.chat.completions.create(
+            completion = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=2048,
-                top_p=1,
-                stream=False,
-                stop=None,
+                max_tokens=2048
             )
             
             return completion.choices[0].message.content
             
         except Exception as e:
-            print(f"ERROR in Groq Generation: {e}")
+            print(f"ERROR in AsyncGroq Generation: {e}")
             raise e
 
     def decide_next_agent(self, last_message: str, current_agent: str) -> str:
